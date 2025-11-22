@@ -17,8 +17,9 @@ ISP = ${isp}
 Postal Code = ${postal}
 Timezone = ${timezone}`;
 
-    const TELEGRAM_BOT_TOKEN = TELEGRAM_BOT_TOKEN;
-    const TELEGRAM_CHAT_ID = TELEGRAM_CHAT_ID;
+    // CORRECT WAY - use process.env
+    const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+    const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
     if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
       return res.status(500).json({ error: 'Missing env variables' });
