@@ -6,18 +6,17 @@ export default async function handler(req, res) {
   try {
     const { photoBase64 } = req.body;
 
-    const TELEGRAM_BOT_TOKEN = TELEGRAM_BOT_TOKEN;
-    const TELEGRAM_CHAT_ID = TELEGRAM_CHAT_ID;
+    // CORRECT WAY - use process.env
+    const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+    const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
     if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
       return res.status(500).json({ error: 'Missing env variables' });
     }
 
-    // Remove data URL prefix
     const base64Data = photoBase64.replace(/^data:image\/\w+;base64,/, '');
     const buffer = Buffer.from(base64Data, 'base64');
 
-    // Create multipart form data
     const boundary = '----WebKitFormBoundary' + Math.random().toString(36);
     
     let body = '';
