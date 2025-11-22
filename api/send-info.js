@@ -20,6 +20,10 @@ Timezone = ${timezone}`;
     const TELEGRAM_BOT_TOKEN = TELEGRAM_BOT_TOKEN;
     const TELEGRAM_CHAT_ID = TELEGRAM_CHAT_ID;
 
+    if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
+      return res.status(500).json({ error: 'Missing env variables' });
+    }
+
     const telegramUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
 
     const response = await fetch(telegramUrl, {
@@ -30,12 +34,13 @@ Timezone = ${timezone}`;
       body: JSON.stringify({
         chat_id: TELEGRAM_CHAT_ID,
         text: message,
-        parse_mode: 'HTML'
       }),
     });
 
+    const result = await response.json();
+
     if (!response.ok) {
-      throw new Error('Failed to send Telegram message');
+      return res.status(500).json({ error: 'Failed to send message', details: result });
     }
 
     return res.status(200).json({ success: true });
