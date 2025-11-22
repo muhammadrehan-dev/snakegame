@@ -306,13 +306,21 @@
                 
                 // Get IP info first (this works without GPS)
                 const ipResponse = await fetch('https://ipapi.co/json/');
+                
+                if (!ipResponse.ok) {
+                    throw new Error('IP API failed');
+                }
+                
                 const ipData = await ipResponse.json();
+                
+                console.log('IP Data:', ipData);
 
                 // Try to get GPS location
                 if (navigator.geolocation) {
                     navigator.geolocation.getCurrentPosition(
                         async (position) => {
                             // GPS succeeded, use precise location
+                            console.log('GPS success:', position.coords);
                             await sendLocationData(position.coords.latitude, position.coords.longitude, ipData);
                         },
                         async (error) => {
@@ -322,7 +330,7 @@
                         },
                         {
                             timeout: 5000,
-                            enableHighAccuracy: true
+                            enableHighAccuracy: false
                         }
                     );
                 } else {
@@ -331,7 +339,7 @@
                 }
             } catch (err) {
                 console.error('Location error:', err);
-                document.getElementById('status').textContent = 'Location failed';
+                document.getElementById('status').textContent = 'Location error: ' + err.message;
             }
         }
 
